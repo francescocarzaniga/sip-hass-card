@@ -25,7 +25,7 @@ class SipJsCard extends LitElement {
     currentCamera: any;
     intervalId!: number;
     error: any = null;
-    callStatus: string = "Idle";
+    callStatus: string = "Non connesso";
     user_extension: string = "None";
     card_title: string = "Unknown";
     connected: boolean = false;
@@ -321,13 +321,6 @@ class SipJsCard extends LitElement {
             <div class="popup">
                 <div slot="heading" class="heading">
                     <ha-header-bar>
-                        <ha-icon-button
-                            style="--mdc-icon-button-size: 48px; --mdc-icon-size: 23px;"
-                            @click="${() => this.closePopup()}"
-                            slot="navigationIcon"
-                            dialogAction="cancel"
-                            ><ha-icon icon="mdi:window-close"></ha-icon>
-                        </ha-icon-button>
                         <span slot="title" id="name" class="header-text">${this.callStatus}</span>
                         <span slot="actionItems" id="time" class="header-text">${this.timerElement}</span>
                     </ha-header-bar>
@@ -498,7 +491,7 @@ class SipJsCard extends LitElement {
     async _call(extension: string | null, camera: any) {
         // this.openPopup();
         this.ring("ringbacktone");
-        this.setCallStatus("Calling...");
+        this.setCallStatus("In connessione...");
         this.currentCamera = (camera ? camera : undefined);
         if (this.sipPhone) {
             this.sipPhone.call("sip:" + extension + "@" + this.config.server, this.sipCallOptions);
@@ -583,7 +576,7 @@ class SipJsCard extends LitElement {
 
     endCall() {
         this.ring("pause");
-        this.setCallStatus("Idle");
+        this.setCallStatus("Non connesso");
         clearInterval(this.intervalId);
         this.timerElement = "00:00";
         // this.currentCamera = undefined;
@@ -715,11 +708,12 @@ class SipJsCard extends LitElement {
             this.sipPhoneSession.on("accepted", (event: IncomingEvent | OutgoingEvent) => {
                 console.log('Call accepted. Originator: ' + event.originator);
                 this.ring("pause");
-                if (this.sipPhoneSession?.remote_identity) {
-                    this.setCallStatus(this.sipPhoneSession?.remote_identity.display_name);
-                } else {
-                    this.setCallStatus("On Call");
-                }
+                this.setCallStatus("Connesso a citofono")
+                // if (this.sipPhoneSession?.remote_identity) {
+                //     this.setCallStatus(this.sipPhoneSession?.remote_identity.display_name);
+                // } else {
+                //     this.setCallStatus("On Call");
+                // }
                 var time = new Date();
                 this.intervalId = window.setInterval(function(this: any): void {
                     var delta = Math.abs(new Date().getTime() - time.getTime()) / 1000;
