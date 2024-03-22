@@ -349,7 +349,7 @@ class SipJsCard extends LitElement {
                             <ha-icon-button
                                 class="accept-btn"
                                 .label=${"Place Call"}
-                                @click="${this._call(401, this.currentCamera)}"
+                                @click="${this._call("401", this.currentCamera)}"
                                 ><ha-icon icon="hass:phone"></ha-icon>
                             </ha-icon-button>
                         </div>
