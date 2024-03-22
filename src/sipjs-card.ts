@@ -349,7 +349,7 @@ class SipJsCard extends LitElement {
                             <ha-icon-button
                                 class="accept-btn"
                                 .label=${"Accept Call"}
-                                @click="${() => this._call(this.config.custom[0].extension, this.currentCamera)}"
+                                @click="${() => this._call(this.config.custom[0].extension, this.config.custom[0].camera)}"
                                 ><ha-icon icon="hass:phone"></ha-icon>
                             </ha-icon-button>
                         </div>
@@ -496,7 +496,7 @@ class SipJsCard extends LitElement {
     }
 
     async _call(extension: string | null, camera: any) {
-        this.openPopup();
+        // this.openPopup();
         this.ring("ringbacktone");
         this.setCallStatus("Calling...");
         this.currentCamera = (camera ? camera : undefined);
