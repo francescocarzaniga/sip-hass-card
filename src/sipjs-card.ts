@@ -348,8 +348,8 @@ class SipJsCard extends LitElement {
                         <div class="row">
                             <ha-icon-button
                                 class="accept-btn"
-                                .label=${"Accept Call"}
-                                @click="${this._answer}"
+                                .label=${"Place Call"}
+                                @click="${this._call(401, this.currentCamera)}"
                                 ><ha-icon icon="hass:phone"></ha-icon>
                             </ha-icon-button>
                         </div>
@@ -583,10 +583,10 @@ class SipJsCard extends LitElement {
 
     endCall() {
         this.ring("pause");
-        this.setCallStatus("Idle");
+        this.setCallStatus("Non collegato");
         clearInterval(this.intervalId);
         this.timerElement = "00:00";
-        this.currentCamera = undefined;
+        // this.currentCamera = undefined;
         this.closePopup();
         this.sipPhoneSession = null;
     }
