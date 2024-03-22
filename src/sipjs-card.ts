@@ -348,8 +348,8 @@ class SipJsCard extends LitElement {
                         <div class="row">
                             <ha-icon-button
                                 class="accept-btn"
-                                .label=${"Place Call"}
-                                @click="${this._call("401", this.currentCamera)}"
+                                .label=${"Accept Call"}
+                                @click="${() => this._call(this.config.custom[0].extension, this.currentCamera)}"
                                 ><ha-icon icon="hass:phone"></ha-icon>
                             </ha-icon-button>
                         </div>
@@ -406,6 +406,10 @@ class SipJsCard extends LitElement {
     firstUpdated() {
         this.popup = true;
         this.currentCamera = this.config.custom[0].camera;
+        this.config.extensions.map((extension: { entity: string | number; person: string | number; icon: any; name: any; extension: any; camera: any; }) => {
+            var isMe = (this.hass.user.id == this.hass.states[extension.person].attributes.user_id);
+            if (isMe) this.user = extension;
+        });
         this.connect();
     }
 
