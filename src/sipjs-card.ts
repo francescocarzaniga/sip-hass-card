@@ -10,8 +10,6 @@ import {
 } from "lit";
 import "./editor";
 import { customElement } from "lit/decorators.js";
-import "./audioVisualizer";
-import { AudioVisualizer } from "./audioVisualizer";
 
 @customElement('sipjs-card')
 class SipJsCard extends LitElement {
@@ -27,7 +25,6 @@ class SipJsCard extends LitElement {
     currentCamera: any;
     intervalId!: number;
     error: any = null;
-    audioVisualizer: any;
     callStatus: string = "Idle";
     user_extension: string = "None";
     card_title: string = "Unknown";
@@ -220,24 +217,6 @@ class SipJsCard extends LitElement {
                 --justify-action-buttons: space-between;
             }
 
-            #audioVisualizer {
-                min-height: 20em;
-                height: 100%;
-                white-space: nowrap;
-                align-items: center;
-                display: flex;
-                justify-content: center;
-            }
-
-            #audioVisualizer div {
-                display: inline-block;
-                width: 3px;
-                height: 100px;
-                margin: 0 7px;
-                background: currentColor;
-                transform: scaleY( .5 );
-                opacity: .25;
-            }
             ha-header-bar {
                 --mdc-theme-on-primary: var(--primary-text-color);
                 --mdc-theme-primary: var(--mdc-theme-surface);
@@ -333,177 +312,100 @@ class SipJsCard extends LitElement {
         return html`
             <audio id="toneAudio" style="display:none" loop controls></audio>
             <audio id="remoteAudio" style="display:none"></audio>
-            ${this.popup ? html`
-                <style>
-                    ha-icon-button {
-                        --mdc-icon-button-size: ${this.config.button_size ? unsafeCSS(this.config.button_size) : css`48`}px;
-                        --mdc-icon-size: ${this.config.button_size ? unsafeCSS(this.config.button_size - 25) : css`23`}px;
-                    }
-                </style>
-                <div class="popup">
-                    <div slot="heading" class="heading">
-                        <ha-header-bar>
+            <style>
+                ha-icon-button {
+                    --mdc-icon-button-size: ${this.config.button_size ? unsafeCSS(this.config.button_size) : css`48`}px;
+                    --mdc-icon-size: ${this.config.button_size ? unsafeCSS(this.config.button_size - 25) : css`23`}px;
+                }
+            </style>
+            <div class="popup">
+                <div slot="heading" class="heading">
+                    <ha-header-bar>
+                        <ha-icon-button
+                            style="--mdc-icon-button-size: 48px; --mdc-icon-size: 23px;"
+                            @click="${() => this.closePopup()}"
+                            slot="navigationIcon"
+                            dialogAction="cancel"
+                            ><ha-icon icon="mdi:window-close"></ha-icon>
+                        </ha-icon-button>
+                        <span slot="title" id="name" class="header-text">${this.callStatus}</span>
+                        <span slot="actionItems" id="time" class="header-text">${this.timerElement}</span>
+                    </ha-header-bar>
+                </div>
+                <div class="content"> 
+                    ${this.currentCamera !== undefined ? html`
+                        <ha-camera-stream
+                            allow-exoplayer
+                            muted
+                            .hass=${this.hass}
+                            .stateObj=${this.hass.states[this.currentCamera]}
+                        ></ha-camera-stream>
+                    ` : html`
+                        <video poster="noposter" style="display:${this.config.video ? "block": "none"}" playsinline id="remoteVideo"></video>
+                        <audio id="remoteAudio" style="display:none"></audio>
+                    `}
+                    <div class="box">
+                        <div class="row">
                             <ha-icon-button
-                                style="--mdc-icon-button-size: 48px; --mdc-icon-size: 23px;"
-                                @click="${() => this.closePopup()}"
-                                slot="navigationIcon"
-                                dialogAction="cancel"
-                                ><ha-icon icon="mdi:window-close"></ha-icon>
+                                class="accept-btn"
+                                .label=${"Accept Call"}
+                                @click="${this._answer}"
+                                ><ha-icon icon="hass:phone"></ha-icon>
                             </ha-icon-button>
-                            <span slot="title" id="name" class="header-text">${this.callStatus}</span>
-                            <span slot="actionItems" id="time" class="header-text">${this.timerElement}</span>
-                        </ha-header-bar>
-                    </div>
-                    <div class="content"> 
-                        ${this.currentCamera !== undefined ? html`
-                            <ha-camera-stream
-                                allow-exoplayer
-                                muted
-                                .hass=${this.hass}
-                                .stateObj=${this.hass.states[this.currentCamera]}
-                            ></ha-camera-stream>
-                        ` : html`
-                            <div id="audioVisualizer" style="display:${this.config.video ? "none": "flex"}"></div>
-                            <video poster="noposter" style="display:${this.config.video ? "block": "none"}" playsinline id="remoteVideo"></video>
-                            <audio id="remoteAudio" style="display:none"></audio>
-                        `}
-                        <div class="box">
-                            <div class="row">
-                                <ha-icon-button
-                                    class="accept-btn"
-                                    .label=${"Accept Call"}
-                                    @click="${this._answer}"
-                                    ><ha-icon icon="hass:phone"></ha-icon>
-                                </ha-icon-button>
-                            </div>
-                            <div class="row">
-                                <ha-icon-button
-                                    .label=${"Mute audio"}
-                                    @click="${this._toggleMuteAudio}"
-                                    ><ha-icon id="muteaudio-icon" icon="hass:microphone"></ha-icon>
-                                </ha-icon-button>
-                                <ha-icon-button style="display:${this.config.video ? "block": "none"}"
-                                    .label=${"Mute video"}
-                                    @click="${this._toggleMuteVideo}"
-                                    ><ha-icon id="mutevideo-icon" icon="${this.config.video ? "hass:video" : "hass:video-off"}"></ha-icon>
-                                </ha-icon-button>
-                            </div>
-                            <div class="row">
-                                ${this.config.dtmfs ?
-                                    this.config.dtmfs.map((dtmf: { signal: any; name: any; icon: any; }) => {
-                                        return html `
-                                            <ha-icon-button
-                                                @click="${() => this._sendDTMF(dtmf.signal)}"
-                                                .label="${dtmf.name}"
-                                                ><ha-icon icon="${dtmf.icon}"></ha-icon>
-                                            </ha-icon-button>
-                                        `;
-                                    }) : ""
-                                }
-                                ${this.config.buttons ?
-                                    this.config.buttons.map((button: { entity: any; name: any; icon: any; }) => {
-                                        return html `
-                                            <ha-icon-button
-                                                @click="${() => this._button(button.entity)}"
-                                                .label="${button.name}"
-                                                ><ha-icon icon="${button.icon}"></ha-icon>
-                                            </ha-icon-button>
-                                        `;
-                                    }) : ""
-                                }
-                            </div>
-                            <div class="row">
-                                <ha-icon-button
-                                    class="hangup-btn"
-                                    .label=${"Decline Call"}
-                                    @click="${this._hangup}"
-                                ><ha-icon icon="hass:phone-hangup"></ha-icon>
-                                </ha-icon-button>
-                            </div>
+                        </div>
+                        <div class="row">
+                            <ha-icon-button
+                                .label=${"Mute audio"}
+                                @click="${this._toggleMuteAudio}"
+                                ><ha-icon id="muteaudio-icon" icon="hass:microphone"></ha-icon>
+                            </ha-icon-button>
+                            <ha-icon-button style="display:${this.config.video ? "block": "none"}"
+                                .label=${"Mute video"}
+                                @click="${this._toggleMuteVideo}"
+                                ><ha-icon id="mutevideo-icon" icon="${this.config.video ? "hass:video" : "hass:video-off"}"></ha-icon>
+                            </ha-icon-button>
+                        </div>
+                        <div class="row">
+                            ${this.config.dtmfs ?
+                                this.config.dtmfs.map((dtmf: { signal: any; name: any; icon: any; }) => {
+                                    return html `
+                                        <ha-icon-button
+                                            @click="${() => this._sendDTMF(dtmf.signal)}"
+                                            .label="${dtmf.name}"
+                                            ><ha-icon icon="${dtmf.icon}"></ha-icon>
+                                        </ha-icon-button>
+                                    `;
+                                }) : ""
+                            }
+                            ${this.config.buttons ?
+                                this.config.buttons.map((button: { entity: any; name: any; icon: any; }) => {
+                                    return html `
+                                        <ha-icon-button
+                                            @click="${() => this._button(button.entity)}"
+                                            .label="${button.name}"
+                                            ><ha-icon icon="${button.icon}"></ha-icon>
+                                        </ha-icon-button>
+                                    `;
+                                }) : ""
+                            }
+                        </div>
+                        <div class="row">
+                            <ha-icon-button
+                                class="hangup-btn"
+                                .label=${"Decline Call"}
+                                @click="${this._hangup}"
+                            ><ha-icon icon="hass:phone-hangup"></ha-icon>
+                            </ha-icon-button>
                         </div>
                     </div>
                 </div>
-            ` : html`
-                <ha-card>
-                    <h1 class="card-header" @click="${this.openPopup}">
-                        <span id="title" class="name">${this.getTitle()}</span>
-                        <span id="extension" style="color: ${this.getConnectionCSS()};">${this.user?.extension}</span>
-                    </h1>
-                    <div class="wrapper">
-                        ${(this.error !== null) ? html`
-                            <ha-alert alert-type="error" .title=${this.error.title}>
-                                ${this.error.message}
-                            </ha-alert>
-                            ` : ''
-                        }
-
-                        ${this.config.extensions.map((extension: { entity: string | number; person: string | number; icon: any; name: any; extension: any; camera: any; }) => {
-                            var stateObj = this.hass.states[extension.entity];
-                            var isMe = (this.hass.user.id == this.hass.states[extension.person].attributes.user_id);
-                            if (isMe) this.user = extension;
-                            if (!(isMe && this.config.hide_me)) {
-                                return html`
-                                    <div class="flex">
-                                        <state-badge
-                                            .stateObj=${stateObj}
-                                            .overrideIcon=${extension.icon}
-                                            .stateColor=${this.config.state_color}
-                                        ></state-badge>
-                                        <div class="info">${extension.name}</div>
-                                        <mwc-button @click="${() => this._call(extension.extension, extension.camera)}">CALL</mwc-button>
-                                    </div>
-                                `;
-                            }
-                        })}
-
-                        ${this.config.custom ?
-                            this.config.custom.map((custom: { entity: string | number; icon: any; name: any; number: any; camera: any; edit: any;}) => {
-                                var stateObj = this.hass.states[custom.entity];
-                                var nameid = "custom_" + custom.name.toLowerCase().split(' ').join('_');;
-                                if (custom.edit){
-                                    return html`
-                                        <div class="flex">
-                                            <state-badge
-                                                .stateObj=${stateObj}
-                                                .overrideIcon=${custom.icon}
-                                                .stateColor=${this.config.state_color}
-                                            ></state-badge>
-                                            <ha-textfield
-                                                id="${nameid}"
-                                                .value=${custom.number}
-                                                .label=${custom.name}
-                                                type="text"
-                                                .inputmode="text"
-                                                class="editField"
-                                            ></ha-textfield>
-                                            <mwc-button @click="${() => this._custom_call(nameid, custom.camera)}">CALL</mwc-button>
-                                        </div>
-                                    `;
-                                } else {
-                                    return html`
-                                        <div class="flex">
-                                            <state-badge
-                                                .stateObj=${stateObj}
-                                                .overrideIcon=${custom.icon}
-                                                .stateColor=${this.config.state_color}
-                                            ></state-badge>
-                                            <div class="info">${custom.name}</div>
-                                            <mwc-button @click="${() => this._call(custom.number, custom.camera)}">CALL</mwc-button>
-                                        </div>
-                                    `;
-                                }
-                            }) : ""
-                        }
-
-                    </div>
-                </ha-card>
-            `}
-        `
+            </div>
+            ` 
     }
 
     firstUpdated() {
-        this.popup = false;
-        this.currentCamera = undefined;
+        this.popup = true;
+        this.currentCamera = this.config.custom[0].camera;
         this.connect();
     }
 
@@ -676,11 +578,6 @@ class SipJsCard extends LitElement {
     }
 
     endCall() {
-        if (!this.config.video && this.currentCamera == undefined && this.audioVisualizer !== undefined) {
-            this.audioVisualizer.stop();
-            this.renderRoot.querySelector('#audioVisualizer').innerHTML = '';
-            this.audioVisualizer = undefined;
-        }
         this.ring("pause");
         this.setCallStatus("Idle");
         clearInterval(this.intervalId);
@@ -813,10 +710,6 @@ class SipJsCard extends LitElement {
 
             this.sipPhoneSession.on("accepted", (event: IncomingEvent | OutgoingEvent) => {
                 console.log('Call accepted. Originator: ' + event.originator);
-                if (!this.config.video && this.currentCamera == undefined) {
-                    let remoteAudio = this.renderRoot.querySelector("#remoteAudio");
-                    this.audioVisualizer = new AudioVisualizer(this.renderRoot, remoteAudio.srcObject, 16);
-                }
                 this.ring("pause");
                 if (this.sipPhoneSession?.remote_identity) {
                     this.setCallStatus(this.sipPhoneSession?.remote_identity.display_name);
