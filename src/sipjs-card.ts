@@ -406,10 +406,6 @@ class SipJsCard extends LitElement {
     firstUpdated() {
         this.popup = true;
         this.currentCamera = this.config.custom[0].camera;
-        this.config.extensions.map((extension: { entity: string | number; person: string | number; icon: any; name: any; extension: any; camera: any; }) => {
-            var isMe = (this.hass.user.id == this.hass.states[extension.person].attributes.user_id);
-            if (isMe) this.user = extension;
-        });
         this.connect();
     }
 
