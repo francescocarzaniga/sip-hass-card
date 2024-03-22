@@ -586,8 +586,8 @@ class SipJsCard extends LitElement {
         this.setCallStatus("Idle");
         clearInterval(this.intervalId);
         this.timerElement = "00:00";
-        this.currentCamera = undefined;
-        this.closePopup();
+        // this.currentCamera = undefined;
+        // this.closePopup();
         this.sipPhoneSession = null;
     }
 
