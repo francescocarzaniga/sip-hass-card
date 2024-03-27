@@ -851,9 +851,8 @@ class SipJsCard extends LitElement {
         });
 
         var urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('call')) {
-            this.openPopup();
-            this._call(urlParams.get('call'), undefined); // TODO: Add camera here or in the _call function itself.
+        if (urlParams.get('autocall')) {
+            this._call(this.config.custom[0].number, this.config.custom[0].camera);
         }
     }
 }
