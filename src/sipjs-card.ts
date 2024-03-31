@@ -25,7 +25,7 @@ class SipJsCard extends LitElement {
     currentCamera: any;
     intervalId!: number;
     error: any = null;
-    callStatus: string = "Non connesso";
+    callStatus: string = "Audio non collegato";
     user_extension: string = "None";
     card_title: string = "Unknown";
     connected: boolean = false;
@@ -221,7 +221,7 @@ class SipJsCard extends LitElement {
                 --mdc-theme-on-primary: var(--primary-text-color);
                 --mdc-theme-primary: var(--mdc-theme-surface);
                 flex-shrink: 0;
-                display: block;
+                display: inline-flex;
             }
             .content {
                 outline: none;
@@ -230,6 +230,12 @@ class SipJsCard extends LitElement {
                 display: flex;
                 flex-flow: column;
                 background-color: var(--secondary-background-color);
+            }
+            .timer {
+                float: right;
+            }      
+            .status {
+                float: left;
             }
             @media all and (max-width: 450px), all and (max-height: 500px) {
                 ha-header-bar {
@@ -321,8 +327,8 @@ class SipJsCard extends LitElement {
             <div class="popup">
                 <div slot="heading" class="heading">
                     <ha-header-bar>
-                        <span slot="title" id="name" class="header-text">${this.callStatus}</span>
-                        <span slot="actionItems" id="time" class="header-text">${this.timerElement}</span>
+                        <span slot="title" id="name" class="header-text status">${this.callStatus}</span>
+                        <span slot="actionItems" id="time" class="header-text timer">${this.timerElement}</span>
                     </ha-header-bar>
                 </div>
                 <div class="content"> 
@@ -491,7 +497,7 @@ class SipJsCard extends LitElement {
     async _call(extension: string | null, camera: any) {
         // this.openPopup();
         this.ring("ringbacktone");
-        this.setCallStatus("In connessione...");
+        this.setCallStatus("In collegamento...");
         this.currentCamera = (camera ? camera : undefined);
         if (this.sipPhone) {
             this.sipPhone.call("sip:" + extension + "@" + this.config.server, this.sipCallOptions);
@@ -576,7 +582,7 @@ class SipJsCard extends LitElement {
 
     endCall() {
         this.ring("pause");
-        this.setCallStatus("Non connesso");
+        this.setCallStatus("Audio non collegato");
         clearInterval(this.intervalId);
         this.timerElement = "00:00";
         // this.currentCamera = undefined;
@@ -708,7 +714,7 @@ class SipJsCard extends LitElement {
             this.sipPhoneSession.on("accepted", (event: IncomingEvent | OutgoingEvent) => {
                 console.log('Call accepted. Originator: ' + event.originator);
                 this.ring("pause");
-                this.setCallStatus("Connesso a citofono")
+                this.setCallStatus("Audio collegato")
                 // if (this.sipPhoneSession?.remote_identity) {
                 //     this.setCallStatus(this.sipPhoneSession?.remote_identity.display_name);
                 // } else {
