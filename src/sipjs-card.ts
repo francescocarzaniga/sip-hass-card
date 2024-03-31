@@ -231,12 +231,6 @@ class SipJsCard extends LitElement {
                 flex-flow: column;
                 background-color: var(--secondary-background-color);
             }
-            .timer {
-                float: right;
-            }      
-            .status {
-                float: left;
-            }
             @media all and (max-width: 450px), all and (max-height: 500px) {
                 ha-header-bar {
                     --mdc-theme-primary: var(--app-header-background-color);
@@ -285,6 +279,13 @@ class SipJsCard extends LitElement {
                 white-space: nowrap;
                 overflow: hidden;
                 z-index: 1;
+            }
+
+            .timer {
+                float: left;
+            }      
+            .status {
+                float: right;
             }
             
             .popup {
