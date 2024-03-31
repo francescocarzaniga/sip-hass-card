@@ -280,13 +280,6 @@ class SipJsCard extends LitElement {
                 overflow: hidden;
                 z-index: 1;
             }
-
-            .timer {
-                float: left;
-            }      
-            .status {
-                float: right;
-            }
             
             .popup {
                 display: flex;
@@ -328,8 +321,8 @@ class SipJsCard extends LitElement {
             <div class="popup">
                 <div slot="heading" class="heading">
                     <ha-header-bar>
-                        <span slot="title" id="name" class="header-text status">${this.callStatus}</span>
-                        <span slot="actionItems" id="time" class="header-text timer">${this.timerElement}</span>
+                        <span slot="actionItems" id="time" class="header-text">${this.timerElement}</span>
+                        <span slot="title" id="name" class="header-text">${this.callStatus}</span>
                     </ha-header-bar>
                 </div>
                 <div class="content"> 
