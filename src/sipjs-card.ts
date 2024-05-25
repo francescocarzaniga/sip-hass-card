@@ -311,7 +311,7 @@ class SipJsCard extends LitElement {
     render() {
         return html`
             <audio id="toneAudio" style="display:none" loop controls></audio>
-            <audio id="remoteAudio" style="display:none"></audio>
+            <audio id="remoteAudio" style="display:none" controls="true"></audio>
             <style>
                 ha-icon-button {
                     --mdc-icon-button-size: ${this.config.button_size ? unsafeCSS(this.config.button_size) : css`48`}px;
@@ -778,6 +778,9 @@ class SipJsCard extends LitElement {
                 let remoteAudio = this.renderRoot.querySelector("#remoteAudio");
                 if (event.track.kind === 'audio' && remoteAudio.srcObject != stream) {
                     remoteAudio.srcObject = stream;
+                    var constraints = remoteAudio.getConstraints();
+                    console.log('Audio constraints: ' + constraints);
+                    remoteAudio.volume = 1.0;
                     try {
                         await remoteAudio.play();
                     }
@@ -789,6 +792,7 @@ class SipJsCard extends LitElement {
                 let remoteVideo = this.renderRoot.querySelector('#remoteVideo');
                 if (this.config.video && event.track.kind === 'video' && remoteVideo.srcObject != stream) {
                     remoteVideo.srcObject = stream;
+                    remoteVideo.volume = 0;
                     try {
                         await remoteVideo.play()
                     }
