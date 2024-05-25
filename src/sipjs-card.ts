@@ -778,7 +778,7 @@ class SipJsCard extends LitElement {
                 let remoteAudio = this.renderRoot.querySelector("#remoteAudio");
                 if (event.track.kind === 'audio' && remoteAudio.srcObject != stream) {
                     remoteAudio.srcObject = stream;
-                    var constraints = remoteAudio.getConstraints();
+                    var constraints = remoteAudio.srcObject.getConstraints();
                     console.log('Audio constraints: ' + constraints);
                     remoteAudio.volume = 1.0;
                     try {
