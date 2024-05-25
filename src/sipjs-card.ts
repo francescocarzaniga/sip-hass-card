@@ -618,7 +618,22 @@ class SipJsCard extends LitElement {
         this.sipPhone = new UA(configuration);
 
         this.sipCallOptions = {
-            mediaConstraints: { audio: true, video: this.config.video },
+            mediaConstraints: {
+                audio: {
+                    mandatory: {
+                        echoCancellation: true, // disabling audio processing
+                        autoGainControl: true,
+                        noiseSuppression: true,
+                        googEchoCancellation: true,
+                        googAutoGainControl: true,
+                        googNoiseSuppression: true,
+                        googHighpassFilter: true,
+                        googTypingNoiseDetection: true,
+                        //googAudioMirroring: true
+                    },
+                    optional: []
+                }, 
+                video: this.config.video },
             rtcOfferConstraints: { offerToReceiveAudio: true, offerToReceiveVideo: this.config.video },
             pcConfig: this.config.iceConfig // we just use the config that directly comes from the YAML config in the YAML card config.
             /* EXAMPLE config
@@ -778,8 +793,6 @@ class SipJsCard extends LitElement {
                 let remoteAudio = this.renderRoot.querySelector("#remoteAudio");
                 if (event.track.kind === 'audio' && remoteAudio.srcObject != stream) {
                     remoteAudio.srcObject = stream;
-                    var constraints = remoteAudio.srcObject.getConstraints();
-                    console.log('Audio constraints: ' + constraints);
                     remoteAudio.volume = 1.0;
                     try {
                         await remoteAudio.play();
