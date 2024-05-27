@@ -621,10 +621,7 @@ class SipJsCard extends LitElement {
             mediaConstraints: {
                 audio: {
                     mandatory: {
-                        echoCancellation: true, // disabling audio processing
-                        autoGainControl: true,
-                        noiseSuppression: true,
-                        googEchoCancellation: true,
+                        echoCancellation: false, // disabling audio processing
                         googAutoGainControl: true,
                         googNoiseSuppression: true,
                         googHighpassFilter: true,
