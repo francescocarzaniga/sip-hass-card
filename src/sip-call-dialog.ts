@@ -33,6 +33,8 @@ interface PopupConfig {
     extensions: { [key: string]: Extension };
     large: boolean | undefined;
     auto_open: boolean;
+    /** With `auto_open`, set to `false` to only open for incoming calls, not for calls you start */
+    auto_open_outgoing?: boolean;
     hide_header_button?: boolean;
 }
 
@@ -90,6 +92,16 @@ class SIPCallDialog extends LitElement {
         // bind openPopup and closePopup to this instance
         this.openPopup = this.openPopup.bind(this);
         this.closePopup = this.closePopup.bind(this);
+        this.autoOpenPopup = this.autoOpenPopup.bind(this);
+    }
+
+    /** Opens the popup for a new call, unless it is outgoing and `auto_open_outgoing` is false */
+    autoOpenPopup() {
+        if (this.config.auto_open_outgoing === false && sipCore.RTCSession?.direction === "outgoing") {
+            this.updateHandler(null);
+            return;
+        }
+        this.openPopup();
     }
 
     static get styles() {
@@ -254,7 +266,7 @@ class SIPCallDialog extends LitElement {
         window.addEventListener("sipcore-update", this.updateHandler);
 
         if (this.config.auto_open !== false) {
-            window.addEventListener("sipcore-call-started", this.openPopup);
+            window.addEventListener("sipcore-call-started", this.autoOpenPopup);
             window.addEventListener("sipcore-call-ended", this.closePopup);
             // `sipcore-call-started` is dispatched as soon as the session is
             // created, which can be before this element has been upgraded: the
@@ -264,7 +276,7 @@ class SIPCallDialog extends LitElement {
             // active call with no way to hang up. Catch up on a call that is
             // already in progress rather than relying on the event ordering.
             if (sipCore.callState !== CALLSTATE.IDLE) {
-                this.openPopup();
+                this.autoOpenPopup();
             }
         } else {
             window.addEventListener("sipcore-call-started", this.updateHandler);
@@ -278,7 +290,7 @@ class SIPCallDialog extends LitElement {
         this.stopCameraRefresh();
 
         if (this.config.auto_open !== false) {
-            window.removeEventListener("sipcore-call-started", this.openPopup);
+            window.removeEventListener("sipcore-call-started", this.autoOpenPopup);
             window.removeEventListener("sipcore-call-ended", this.closePopup);
         } else {
             window.removeEventListener("sipcore-call-started", this.updateHandler);

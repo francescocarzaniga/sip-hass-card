@@ -31,12 +31,37 @@ interface Button {
     data: any;
 }
 
+/**
+ * Status line texts. `{name}` is replaced with the remote party's name.
+ */
+interface StatusTexts {
+    idle?: string;
+    incoming?: string;
+    outgoing?: string;
+    connecting?: string;
+    connected?: string;
+}
+
+const DEFAULT_STATUS_TEXTS: Required<StatusTexts> = {
+    idle: "No active call",
+    incoming: "Incoming call from {name}",
+    outgoing: "Outgoing call to {name}",
+    connecting: "Connecting to {name}",
+    connected: "Connected to {name}",
+};
+
 interface CallCardConfig {
     buttons: Button[];
     extensions: { [key: string]: Extension };
     idle_text: string;
     camera_entity: string | null;
     largeUI: boolean;
+    /** When idle, the green button calls this extension instead of being disabled */
+    call_extension?: string;
+    /** Show call status and duration in a bar above the image instead of in the footer */
+    header?: boolean;
+    /** Override the status line texts */
+    status_texts?: StatusTexts;
 }
 
 @customElement("sip-call-card")
@@ -82,8 +107,12 @@ class SIPCallCard extends LitElement {
             }
 
             hui-image {
+                display: block;
                 width: 100%;
                 height: auto;
+                /* Reserve the frame while the live stream starts, so the card doesn't load tiny and jump */
+                aspect-ratio: 16 / 9;
+                background-color: #000;
             }
 
             #remoteVideo {
@@ -161,6 +190,26 @@ class SIPCallCard extends LitElement {
             .footer[large] span {
                 margin: 0 16px;
             }
+
+            .header {
+                display: flex;
+                align-items: center;
+                gap: 24px;
+                padding: 8px 16px;
+                font-size: 18px;
+                font-weight: 500;
+                color: var(--primary-text-color);
+                background-color: var(--secondary-background-color);
+            }
+
+            .header[large] {
+                font-size: 24px;
+                padding: 14px 20px;
+            }
+
+            .header .duration {
+                font-variant-numeric: tabular-nums;
+            }
         `;
     }
 
@@ -196,27 +245,31 @@ class SIPCallCard extends LitElement {
         let camera: string = "";
         let statusText;
         let phoneIcon: string;
-        let remoteName = this.config?.extensions[sipCore.remoteExtension || ""]?.name || sipCore.remoteName;
+        let remoteName = this.config?.extensions?.[sipCore.remoteExtension || ""]?.name || sipCore.remoteName;
+        const texts = { ...DEFAULT_STATUS_TEXTS, ...(this.config?.status_texts ?? {}) };
+        const fill = (text: string) => text.replace(/\{name\}/g, remoteName ?? "");
+        const callExtension = this.config?.call_extension ? String(this.config.call_extension) : "";
+        const showHeader = this.config?.header === true;
 
         switch (sipCore.callState) {
             case CALLSTATE.IDLE:
-                statusText = "No active call";
+                statusText = fill(texts.idle);
                 phoneIcon = "mdi:phone";
                 break;
             case CALLSTATE.INCOMING:
-                statusText = "Incoming call from " + remoteName;
+                statusText = fill(texts.incoming);
                 phoneIcon = "mdi:phone-incoming";
                 break;
             case CALLSTATE.OUTGOING:
-                statusText = "Outgoing call to " + remoteName;
+                statusText = fill(texts.outgoing);
                 phoneIcon = "mdi:phone-outgoing";
                 break;
             case CALLSTATE.CONNECTED:
-                statusText = "Connected to " + remoteName;
+                statusText = fill(texts.connected);
                 phoneIcon = "mdi:phone-in-talk";
                 break;
             case CALLSTATE.CONNECTING:
-                statusText = "Connecting to " + remoteName;
+                statusText = fill(texts.connecting);
                 phoneIcon = "mdi:phone";
                 break;
             default:
@@ -230,7 +283,7 @@ class SIPCallCard extends LitElement {
             sipCore.remoteExtension !== null &&
             sipCore.remoteVideoStream === null
         ) {
-            camera = this.config?.extensions[sipCore.remoteExtension]?.camera_entity || "";
+            camera = this.config?.extensions?.[sipCore.remoteExtension]?.camera_entity || "";
             if (!camera) {
                 if (sipCore.remoteAudioStream !== null) {
                     if (this.audioVisualizer === undefined) {
@@ -242,8 +295,20 @@ class SIPCallCard extends LitElement {
             }
         }
 
+        const isIdle = sipCore.callState === CALLSTATE.IDLE;
+
         return html`
             <ha-card>
+                ${
+                    showHeader
+                        ? html`
+                              <div ?large=${this.config?.largeUI} class="header">
+                                  <span class="duration">${sipCore.callDuration}</span>
+                                  <span>${statusText}</span>
+                              </div>
+                          `
+                        : ""
+                }
                 <div id="audioVisualizer" style="display: ${
                     sipCore.callState !== CALLSTATE.IDLE && !camera && sipCore.remoteVideoStream === null
                         ? "flex"
@@ -285,15 +350,20 @@ class SIPCallCard extends LitElement {
                     <div>
                         <ha-icon-button
                             style="color: var(--label-badge-green);"
-                            label="Answer call"
-                            ?disabled="${sipCore.callState === CALLSTATE.IDLE}"
-                            @click="${() => sipCore.answerCall()}">
+                            label="${isIdle && callExtension ? "Call" : "Answer call"}"
+                            ?disabled="${
+                                isIdle ? !callExtension : sipCore.callState !== CALLSTATE.INCOMING
+                            }"
+                            @click="${() => {
+                                if (isIdle && callExtension) sipCore.startCall(callExtension);
+                                else sipCore.answerCall();
+                            }}">
                             <ha-icon .icon=${phoneIcon}></ha-icon>
                         </ha-icon-button>
-                        <span>${statusText}</span>
+                        ${showHeader ? "" : html`<span>${statusText}</span>`}
                     </div>
                     <div>
-                        ${this.config?.buttons.map((button) => {
+                        ${(this.config?.buttons ?? []).map((button) => {
                             if (button.type === ButtonType.SERVICE_CALL) {
                                 return html`
                                     <ha-icon-button
@@ -360,7 +430,7 @@ class SIPCallCard extends LitElement {
                         </ha-icon-button>
                     </div>
                     <div>
-                        <span style="color: gray">${sipCore.callDuration}</span>
+                        ${showHeader ? "" : html`<span style="color: gray">${sipCore.callDuration}</span>`}
                         <ha-icon-button
                             style="color: var(--label-badge-red);"
                             label="End Call"
