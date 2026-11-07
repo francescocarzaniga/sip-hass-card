@@ -62,6 +62,32 @@ It includes official cards and popups, but also supports third-party cards.
 <br>
 <br>
 
+### Call Card options (fork)
+
+```yaml
+type: custom:sip-call-card
+camera_entity: camera.doorbell     # HA live view (fallback)
+go2rtc_stream: doorbell            # go2rtc stream name, either:
+go2rtc_url: https://go2rtc.example.com   #   a) go2rtc web UI as the browser reaches it (must be https if HA is)
+# go2rtc_ingress: true             #   b) or via the go2rtc add-on's ingress (HA OS / Supervised)
+# go2rtc_addon_slug: a889bffc_go2rtc
+# live_provider: webrtc            # default mse
+call_extension: "401"              # green button / tap calls this when idle
+tap_to_call: true                  # tap the picture: call / answer / hang up
+status_texts:                      # {name} = remote party
+  idle: Citofono non collegato
+  connected: Audio collegato
+header: false                      # true: status + timer in a bar above the picture
+extensions:
+  "401":
+    name: Citofono
+buttons: []
+```
+
+The card-level picture stays on (without restarting) during calls with `call_extension`; calls with other extensions use that extension's own `camera_entity` / `go2rtc_*` keys. If go2rtc can't be reached through ingress, the card falls back to `camera_entity`.
+
+<br>
+
 ## Contacts Card
 
 <img align="right" height="250" hspace="20" alt="contacts_card" src="https://raw.githubusercontent.com/TECH7Fox/sipcore-hass-integration/main/images/contacts_card.png" />

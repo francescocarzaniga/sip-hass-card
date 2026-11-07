@@ -2,6 +2,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { sipCore, CALLSTATE } from "./sip-core";
 import { AudioVisualizer } from "./audio-visualizer";
+import { MediaSource, directPlayerUrl, ingressPlayerUrl, sourceKey, streamName } from "./go2rtc";
 
 declare global {
     interface Window {
@@ -9,10 +10,9 @@ declare global {
     }
 }
 
-interface Extension {
+interface Extension extends MediaSource {
     name: string;
     status_entity: string | null;
-    camera_entity: string | null;
     hidden: boolean | null;
     edit: boolean | null;
     override_icon: string | null;
@@ -50,11 +50,15 @@ const DEFAULT_STATUS_TEXTS: Required<StatusTexts> = {
     connected: "Connected to {name}",
 };
 
-interface CallCardConfig {
+/**
+ * Card-level `camera_entity` / `go2rtc_*` keys are the picture shown while idle,
+ * and stay on during calls with `call_extension` (so the stream doesn't restart).
+ * Other calls use the remote extension's own keys.
+ */
+interface CallCardConfig extends MediaSource {
     buttons: Button[];
     extensions: { [key: string]: Extension };
     idle_text: string;
-    camera_entity: string | null;
     largeUI: boolean;
     /** When idle, the green button calls this extension instead of being disabled */
     call_extension?: string;
@@ -80,8 +84,77 @@ class SIPCallCard extends LitElement {
     @state()
     private audioVisualizer: AudioVisualizer | undefined;
 
+    /** go2rtc ingress player URLs by source key; `null` means it failed and the camera entity is used */
+    @state()
+    private ingressUrls: { [key: string]: string | null } = {};
+    private ingressPending = new Set<string>();
+
+    /** Picks what the media area shows for the current call state */
+    private mediaSource(callExtension: string): MediaSource | null {
+        const cardSource = sourceKey(this.config) ? (this.config as MediaSource) : null;
+        if (sipCore.callState === CALLSTATE.IDLE) return cardSource;
+        const remote = sipCore.remoteExtension || "";
+        const ext = this.config?.extensions?.[remote];
+        if (remote && remote === callExtension && cardSource) return cardSource;
+        return sourceKey(ext) ? (ext as MediaSource) : null;
+    }
+
+    private renderMedia(source: MediaSource | null) {
+        if (!source) return "";
+        const key = sourceKey(source);
+        const stream = streamName(source);
+
+        let frameUrl = directPlayerUrl(source);
+        if (!frameUrl && stream && source.go2rtc_ingress) {
+            if (!(key in this.ingressUrls) && !this.ingressPending.has(key)) {
+                this.ingressPending.add(key);
+                ingressPlayerUrl(this.hass, source)
+                    .then(
+                        (url) => (this.ingressUrls = { ...this.ingressUrls, [key]: url }),
+                        (err) => {
+                            console.warn("SIP Core: go2rtc ingress unavailable, using camera entity:", err);
+                            this.ingressUrls = { ...this.ingressUrls, [key]: null };
+                        },
+                    )
+                    .finally(() => {
+                        this.ingressPending.delete(key);
+                        // Class fields (ES2022) shadow Lit's reactive accessors, so ask explicitly
+                        this.requestUpdate();
+                    });
+            }
+            const resolved = this.ingressUrls[key];
+            if (resolved) frameUrl = resolved;
+            else if (resolved === undefined) return html`<div class="frame"></div>`; // still resolving
+        }
+
+        if (frameUrl) {
+            return html`
+                <div class="frame">
+                    <iframe src=${frameUrl} allow="autoplay; fullscreen" title="Camera"></iframe>
+                    ${this.config?.tap_to_call ? html`<div class="tap-overlay"></div>` : ""}
+                </div>
+            `;
+        }
+
+        if (source.camera_entity) {
+            return html`
+                <hui-image
+                    tabindex="0"
+                    .cameraImage=${source.camera_entity}
+                    .hass=${this.hass}
+                    .cameraView=${"live"}
+                    .aspectRatio=${"16:9"}
+                ></hui-image>
+            `;
+        }
+        return "";
+    }
+
     setConfig(config: any) {
         this.config = config;
+        // `config` is a plain class field under ES2022 semantics, not a reactive
+        // accessor, so editing the card in the dashboard editor needs an explicit update
+        this.requestUpdate();
         // TODO: Check if config is valid
     }
 
@@ -125,6 +198,27 @@ class SIPCallCard extends LitElement {
             #remoteVideo {
                 width: 100%;
                 height: auto;
+            }
+
+            .frame {
+                position: relative;
+                width: 100%;
+                aspect-ratio: 16 / 9;
+                background-color: #000;
+            }
+
+            .frame iframe {
+                position: absolute;
+                inset: 0;
+                width: 100%;
+                height: 100%;
+                border: 0;
+            }
+
+            /* Taps inside an iframe never reach the card; this catches them for tap_to_call */
+            .tap-overlay {
+                position: absolute;
+                inset: 0;
             }
 
             ha-icon {
@@ -336,12 +430,11 @@ class SIPCallCard extends LitElement {
                 break;
         }
 
-        if (
-            sipCore.callState !== CALLSTATE.IDLE &&
-            sipCore.remoteExtension !== null &&
-            sipCore.remoteVideoStream === null
-        ) {
-            camera = this.config?.extensions?.[sipCore.remoteExtension]?.camera_entity || "";
+        const media = sipCore.remoteVideoStream === null ? this.mediaSource(callExtension) : null;
+        const mediaTemplate = this.renderMedia(media);
+
+        if (sipCore.callState !== CALLSTATE.IDLE && sipCore.remoteVideoStream === null) {
+            camera = mediaTemplate ? sourceKey(media) : "";
             if (!camera) {
                 if (sipCore.remoteAudioStream !== null) {
                     if (this.audioVisualizer === undefined) {
@@ -380,33 +473,16 @@ class SIPCallCard extends LitElement {
                     sipCore.remoteVideoStream === null ? "none" : "block"
                 }" playsinline id="remoteVideo"></video>
                 ${
-                    sipCore.callState === CALLSTATE.IDLE
-                        ? this.config?.camera_entity
-                            ? html`
-                                  <hui-image
-                                      tabindex="0"
-                                      .cameraImage=${this.config.camera_entity}
-                                      .hass=${this.hass}
-                                      .cameraView=${"live"}
-                                      .aspectRatio=${"16:9"}
-                                  ></hui-image>
-                              `
-                            : html`
-                                  <div class="placeholder">
-                                      <span>${this.config?.idle_text ?? "No active call"}</span>
-                                  </div>
-                              `
-                        : camera
+                    // One call site for idle and in-call, so the same stream element is
+                    // reused (not restarted) when a call starts or ends with the same source
+                    mediaTemplate ||
+                    (sipCore.callState === CALLSTATE.IDLE
                         ? html`
-                              <hui-image
-                                  tabindex="0"
-                                  .cameraImage=${camera}
-                                  .hass=${this.hass}
-                                  .cameraView=${"live"}
-                                  .aspectRatio=${"16:9"}
-                              ></hui-image>
+                              <div class="placeholder">
+                                  <span>${this.config?.idle_text ?? "No active call"}</span>
+                              </div>
                           `
-                        : ""
+                        : "")
                 }
                 </div>
                 <div ?large=${this.config?.largeUI} class="footer both">
