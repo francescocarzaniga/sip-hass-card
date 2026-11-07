@@ -109,6 +109,8 @@ class SIPCallCard extends LitElement {
                 overflow: hidden;
                 position: relative;
                 height: 100%;
+                /* Lets the footer scale with the card's own width (see @container below) */
+                container-type: inline-size;
             }
 
             hui-image {
@@ -173,16 +175,29 @@ class SIPCallCard extends LitElement {
 
             .footer > div {
                 display: flex;
+                flex: none;
+                align-items: center;
+            }
+
+            /* The status text takes the free space and is cut with "…" instead of wrapping over the video */
+            .footer > div:first-child {
+                flex: 1 1 auto;
+                min-width: 0;
             }
 
             .both {
                 display: flex;
                 justify-content: space-between;
+                gap: 4px;
             }
 
             .footer span {
                 align-self: center;
                 margin: 0 8px;
+                min-width: 0;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
 
             .footer[large] {
@@ -194,6 +209,29 @@ class SIPCallCard extends LitElement {
 
             .footer[large] span {
                 margin: 0 16px;
+            }
+
+            /* Phones and narrow columns: smaller text and buttons so the bar stays one thin line */
+            @container (max-width: 420px) {
+                .footer,
+                .footer[large] {
+                    font-size: 13px;
+                    padding: 2px 4px;
+                    --mdc-icon-button-size: 34px;
+                    --mdc-icon-size: 20px;
+                }
+
+                .footer span,
+                .footer[large] span {
+                    margin: 0 4px;
+                }
+
+                .header,
+                .header[large] {
+                    font-size: 14px;
+                    padding: 6px 10px;
+                    gap: 12px;
+                }
             }
 
             .header {
