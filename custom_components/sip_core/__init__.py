@@ -57,6 +57,15 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
                 path=Path(__file__).parent / "www" / "ring-tone.mp3",
                 cache_headers=True,
             ),
+            # RNNoise noise suppression (`noise_suppression` option), loaded on demand
+            *(
+                StaticPathConfig(
+                    url_path=f"/sip_core_files/{filename}",
+                    path=Path(__file__).parent / "www" / filename,
+                    cache_headers=True,
+                )
+                for filename in ("rnnoise-worklet.js", "rnnoise.wasm", "rnnoise_simd.wasm")
+            ),
         ]
     )
 

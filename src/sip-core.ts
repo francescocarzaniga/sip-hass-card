@@ -2,6 +2,7 @@ import { UA, WebSocketInterface } from "jssip/lib/JsSIP";
 import { RTCSessionEvent, CallOptions } from "jssip/lib/UA";
 import { EndEvent, PeerConnectionEvent, IncomingEvent, IceCandidateEvent, RTCSession } from "jssip/lib/RTCSession";
 import pjson from "../package.json";
+import { DenoisedStream, NoiseSuppressionConfig } from "./noise-suppression";
 
 const version = pjson.version;
 
@@ -66,6 +67,13 @@ export interface SIPCoreConfig {
      * "wss://sip.example.com/ws"
      */
     custom_wss_url: string;
+    /**
+     * RNNoise noise suppression, on top of the browser's own processing.
+     *
+     * @example
+     * { "microphone": true, "remote": false }
+     */
+    noise_suppression?: NoiseSuppressionConfig;
 }
 
 /**
@@ -102,6 +110,11 @@ export class SIPCore {
 
     public remoteAudioStream: MediaStream | null = null;
     public remoteVideoStream: MediaStream | null = null;
+
+    /** Microphone stream opened by SIP Core itself. JsSIP does not stop streams it was handed. */
+    private localMicStream: MediaStream | null = null;
+    private micDenoiser: DenoisedStream | null = null;
+    private remoteDenoiser: DenoisedStream | null = null;
 
     public incomingAudio: HTMLAudioElement | null = null;
     public outgoingAudio: HTMLAudioElement | null = null;
@@ -186,19 +199,38 @@ export class SIPCore {
     }
 
     private async callOptions(): Promise<CallOptions> {
+        // Drop anything left over from a previous attempt (e.g. a call that never started)
+        this.releaseLocalAudio();
+
         let micStream: MediaStream | undefined = undefined;
-        if (this.AudioInputId !== null) {
-            console.debug(`Using audio input device: ${this.AudioInputId}`);
+        const denoiseMic = this.config.noise_suppression?.microphone === true;
+        if (this.AudioInputId !== null || denoiseMic) {
+            if (this.AudioInputId !== null) {
+                console.debug(`Using audio input device: ${this.AudioInputId}`);
+            }
             try {
                 micStream = await navigator.mediaDevices.getUserMedia({
                     audio: {
-                        deviceId: { exact: this.AudioInputId },
+                        ...(this.AudioInputId !== null ? { deviceId: { exact: this.AudioInputId } } : {}),
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
                     },
                     video: this.config.sip_video,
                 });
+                this.localMicStream = micStream;
             } catch (err) {
                 console.error(`Error getting audio input: ${err}`);
                 micStream = undefined;
+            }
+        }
+
+        if (micStream && denoiseMic) {
+            try {
+                this.micDenoiser = await DenoisedStream.create(micStream, this.version);
+                micStream = this.micDenoiser.stream;
+            } catch (err) {
+                console.warn("SIP Core: microphone noise suppression unavailable, sending raw audio:", err);
             }
         }
 
@@ -468,7 +500,34 @@ export class SIPCore {
     }
 
     async startCall(extension: string) {
-        this.ua.call(extension, await this.callOptions());
+        if (this.RTCSession !== null) {
+            // A second session would be terminated in `newRTCSession` anyway; bail out
+            // before `callOptions()` touches the microphone of the call in progress.
+            console.warn("Already in a call. Cannot start another one.");
+            return;
+        }
+        const options = await this.callOptions();
+        try {
+            this.ua.call(extension, options);
+        } catch (err) {
+            this.releaseLocalAudio();
+            throw err;
+        }
+    }
+
+    /** Stops the microphone and denoiser opened for the current call */
+    private releaseLocalAudio() {
+        this.micDenoiser?.close();
+        this.micDenoiser = null;
+        this.localMicStream?.getTracks().forEach((track) => track.stop());
+        this.localMicStream = null;
+    }
+
+    /** Releases all audio resources SIP Core opened for the current call */
+    private releaseCallAudio() {
+        this.releaseLocalAudio();
+        this.remoteDenoiser?.close();
+        this.remoteDenoiser = null;
     }
 
     /** Dispatches a `sipcore-update` event */
@@ -533,6 +592,7 @@ export class SIPCore {
             e.session.on("failed", (e: EndEvent) => {
                 console.warn("Call failed:", e);
                 window.dispatchEvent(new Event("sipcore-call-ended"));
+                this.releaseCallAudio();
                 this.RTCSession = null;
                 this.remoteVideoStream = null;
                 this.remoteAudioStream = null;
@@ -544,6 +604,7 @@ export class SIPCore {
             e.session.on("ended", (e: EndEvent) => {
                 console.info("Call ended:", e);
                 window.dispatchEvent(new Event("sipcore-call-ended"));
+                this.releaseCallAudio();
                 this.RTCSession = null;
                 this.remoteVideoStream = null;
                 this.remoteAudioStream = null;
@@ -634,9 +695,27 @@ export class SIPCore {
         }
 
         let remoteAudio = document.getElementById("remoteAudio") as HTMLAudioElement;
-        if (e.track.kind === "audio" && remoteAudio.srcObject != stream) {
+        if (e.track.kind === "audio" && this.remoteAudioStream !== stream) {
+            // The visualizer keeps reading the raw stream; only playback is denoised.
             this.remoteAudioStream = stream;
-            remoteAudio.srcObject = stream;
+            let playbackStream = stream;
+            this.remoteDenoiser?.close();
+            this.remoteDenoiser = null;
+            if (this.config.noise_suppression?.remote === true) {
+                try {
+                    const denoiser = await DenoisedStream.create(stream, this.version, true);
+                    if (this.remoteAudioStream !== stream) {
+                        // Call ended or stream replaced while RNNoise was loading
+                        denoiser.close();
+                        return;
+                    }
+                    this.remoteDenoiser = denoiser;
+                    playbackStream = denoiser.stream;
+                } catch (err) {
+                    console.warn("SIP Core: remote noise suppression unavailable, playing raw audio:", err);
+                }
+            }
+            remoteAudio.srcObject = playbackStream;
             try {
                 await remoteAudio.play();
             } catch (err) {

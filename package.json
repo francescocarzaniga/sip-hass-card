@@ -1,6 +1,6 @@
 {
   "name": "ha-sip",
-  "version": "5.1.2",
+  "version": "5.1.2-rnnoise.1",
   "description": "A SIP client inside home assistant!",
   "main": "sipjs-card.js",
   "scripts": {
@@ -22,6 +22,7 @@
   },
   "homepage": "https://github.com/TECH7Fox/sipcore-hass-integration#readme",
   "devDependencies": {
+    "copy-webpack-plugin": "^11.0.0",
     "ts-loader": "^9.5.2",
     "tslib": "^2.3.1",
     "typescript": "^4.9.5",
@@ -29,6 +30,7 @@
     "webpack-cli": "^4.10.0"
   },
   "dependencies": {
+    "@sapphi-red/web-noise-suppressor": "^0.4.1",
     "jssip": "^3.10.6",
     "lit": "^2.8.0"
   },

@@ -4,3 +4,7 @@ dist
 vendor
 sip_core.js
 sip_core.js.LICENSE.txt
+rnnoise-worklet.js
+rnnoise.wasm
+rnnoise_simd.wasm
+rnnoise-worklet.js.LICENSE.txt

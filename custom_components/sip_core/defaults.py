@@ -34,6 +34,10 @@ sip_config = {
     ],
     "sip_video": False,
     "auto_answer": False,
+    "noise_suppression": {
+        "microphone": False,
+        "remote": False
+    },
     "popup_config": {
         "auto_open": True,
         "large": False,

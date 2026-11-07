@@ -98,6 +98,25 @@ rainbow_border: true;
 <br>
 <br>
 
+## 🔇 Noise Suppression
+
+SIP Core can run audio through [RNNoise](https://jmvalin.ca/demo/rnnoise/) (a small neural-network denoiser) on top of the browser's own echo cancellation and noise suppression. Useful for tablets and wall panels with poor built-in audio processing.
+
+Add this to the SIP Core config (Settings → Devices & Services → SIP Core → Configure):
+
+```yaml
+noise_suppression:
+  microphone: true   # denoise your mic before it is sent
+  remote: false      # denoise the audio you receive (e.g. a noisy doorbell)
+```
+
+- Runs locally in the browser (AudioWorklet + WASM, ~150 KB loaded only when a call starts).
+- If it cannot start (old browser, or audio blocked until the first tap), the call continues with unprocessed audio and a warning is logged in the browser console.
+- RNNoise works best on steady background noise (fans, hum, traffic, wind); it cannot remove speaker echo, which is the job of the browser's echo cancellation.
+
+<br>
+<br>
+
 ## 📋 Requirements
 For this to work you will need the following:
  * ☎️ A sip/pbx server (Works best with the [Asterisk add-on](https://github.com/TECH7Fox/Asterisk-add-on))
