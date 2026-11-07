@@ -112,7 +112,7 @@ class SIPContactsCard extends LitElement {
             <ha-card header="${this.config?.title || "Contacts"}">
                 <div class="wrapper">
                     ${Object.entries(this.config?.extensions || {}).map(([number, extension]) => {
-                        const isMe = number === sipCore.user.extension;
+                        const isMe = number === sipCore.user?.extension;
                         const stateObj = this.hass.states[extension.status_entity || ""] || null;
                         if (extension.hidden) return;
                         if (isMe && this.config?.hide_me) return;

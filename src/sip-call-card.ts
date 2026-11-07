@@ -438,7 +438,7 @@ class SIPCallCard extends LitElement {
                         <ha-icon-button
                             class="audio-button"
                             label="Mute video"
-                            style="display: ${sipCore.config.sip_video ? "block" : "none"}"
+                            style="display: ${sipCore.config?.sip_video ? "block" : "none"}"
                             ?disabled="${sipCore.RTCSession === null}"
                             @click="${() => {
                                 if (sipCore.RTCSession?.isMuted().video) sipCore.RTCSession?.unmute({ video: true });

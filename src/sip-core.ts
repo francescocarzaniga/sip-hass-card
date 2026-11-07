@@ -96,6 +96,8 @@ export class SIPCore {
     public version: string = version;
     public user!: User;
     public config!: SIPCoreConfig;
+    /** Resolves once `init()` has finished (successfully or not) */
+    public ready: Promise<void> = Promise.resolve();
 
     private heartBeatHandle: ReturnType<typeof setInterval> | null = null;
     private heartBeatIntervalMs: number = 30000;
@@ -170,7 +172,7 @@ export class SIPCore {
     }
 
     get registered(): boolean {
-        return this.ua.isRegistered();
+        return this.ua?.isRegistered() ?? false;
     }
 
     private async fetchWSSUrl(): Promise<string> {
@@ -500,6 +502,10 @@ export class SIPCore {
     }
 
     async startCall(extension: string) {
+        if (!this.ua) {
+            console.warn("SIP Core is still starting. Cannot place a call yet.");
+            return;
+        }
         if (this.RTCSession !== null) {
             // A second session would be terminated in `newRTCSession` anyway; bail out
             // before `callOptions()` touches the microphone of the call in progress.
@@ -814,7 +820,13 @@ export class SIPCore {
 
 /** @hidden */
 const sipCore = new SIPCore();
-await sipCore.init().catch((error) => {
+// Initialise in the background instead of awaiting it at module level: a
+// top-level await here held back every card definition until the config fetch,
+// ingress session and audio setup had finished, so Home Assistant showed small
+// placeholders in the meantime. Cards render straight away and refresh on the
+// `sipcore-update` event that `init()` dispatches; code that needs the loaded
+// config can await `sipCore.ready`.
+sipCore.ready = sipCore.init().catch((error) => {
     console.error("Error initializing SIP Core:", error);
 });
 (window as any).sipCore = sipCore;
