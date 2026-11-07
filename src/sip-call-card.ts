@@ -62,6 +62,11 @@ interface CallCardConfig {
     header?: boolean;
     /** Override the status line texts */
     status_texts?: StatusTexts;
+    /**
+     * Tapping the image/video: calls `call_extension` when idle, answers an
+     * incoming call, and hangs up an active one
+     */
+    tap_to_call?: boolean;
 }
 
 @customElement("sip-call-card")
@@ -213,6 +218,21 @@ class SIPCallCard extends LitElement {
         `;
     }
 
+    private onMediaTap = () => {
+        if (this.config?.tap_to_call !== true) return;
+        switch (sipCore.callState) {
+            case CALLSTATE.IDLE:
+                if (this.config.call_extension) sipCore.startCall(String(this.config.call_extension));
+                break;
+            case CALLSTATE.INCOMING:
+                sipCore.answerCall();
+                break;
+            default:
+                sipCore.endCall();
+                break;
+        }
+    };
+
     updateHandler = (event: any) => {
         this.requestUpdate();
 
@@ -309,6 +329,10 @@ class SIPCallCard extends LitElement {
                           `
                         : ""
                 }
+                <div
+                    class="media"
+                    style="cursor: ${this.config?.tap_to_call ? "pointer" : "auto"}"
+                    @click=${this.onMediaTap}>
                 <div id="audioVisualizer" style="display: ${
                     sipCore.callState !== CALLSTATE.IDLE && !camera && sipCore.remoteVideoStream === null
                         ? "flex"
@@ -346,6 +370,7 @@ class SIPCallCard extends LitElement {
                           `
                         : ""
                 }
+                </div>
                 <div ?large=${this.config?.largeUI} class="footer both">
                     <div>
                         <ha-icon-button
