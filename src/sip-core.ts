@@ -2,7 +2,7 @@ import { UA, WebSocketInterface } from "jssip/lib/JsSIP";
 import { RTCSessionEvent, CallOptions } from "jssip/lib/UA";
 import { EndEvent, PeerConnectionEvent, IncomingEvent, IceCandidateEvent, RTCSession } from "jssip/lib/RTCSession";
 import pjson from "../package.json";
-import { DenoisedStream, NoiseSuppressionConfig } from "./noise-suppression";
+import { DenoisedStream, NoiseSuppressionConfig, hasBrowserProcessingOverrides } from "./noise-suppression";
 
 const version = pjson.version;
 
@@ -74,6 +74,11 @@ export interface SIPCoreConfig {
      * { "microphone": true, "remote": false }
      */
     noise_suppression?: NoiseSuppressionConfig;
+    /**
+     * Seconds to keep the microphone muted after a call connects, while the
+     * echo cancellers on both ends adapt. 0 or unset disables it.
+     */
+    mute_on_start?: number;
 }
 
 /**
@@ -205,18 +210,23 @@ export class SIPCore {
         this.releaseLocalAudio();
 
         let micStream: MediaStream | undefined = undefined;
-        const denoiseMic = this.config.noise_suppression?.microphone === true;
-        if (this.AudioInputId !== null || denoiseMic) {
+        const ns = this.config.noise_suppression;
+        const denoiseMic = ns?.microphone === true;
+        if (this.AudioInputId !== null || denoiseMic || hasBrowserProcessingOverrides(ns)) {
             if (this.AudioInputId !== null) {
                 console.debug(`Using audio input device: ${this.AudioInputId}`);
             }
+            const processing = {
+                echoCancellation: ns?.browser_echo_cancellation ?? true,
+                noiseSuppression: ns?.browser_noise_suppression ?? true,
+                autoGainControl: ns?.browser_auto_gain ?? true,
+            };
+            console.info("SIP Core: browser microphone processing", processing);
             try {
                 micStream = await navigator.mediaDevices.getUserMedia({
                     audio: {
                         ...(this.AudioInputId !== null ? { deviceId: { exact: this.AudioInputId } } : {}),
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true,
+                        ...processing,
                     },
                     video: this.config.sip_video,
                 });
@@ -521,6 +531,21 @@ export class SIPCore {
         }
     }
 
+    /** Mutes the mic for `mute_on_start` seconds after the call connects, then unmutes it */
+    private applyMuteOnStart(session: RTCSession) {
+        const seconds = Number(this.config.mute_on_start) || 0;
+        if (seconds <= 0) return;
+        console.info(`SIP Core: muting microphone for the first ${seconds}s of the call`);
+        session.mute({ audio: true });
+        setTimeout(() => {
+            // Leave it alone if the call is over or the user already unmuted it
+            if (this.RTCSession !== session || !session.isEstablished() || !session.isMuted().audio) return;
+            session.unmute({ audio: true });
+            console.info("SIP Core: microphone unmuted");
+            this.triggerUpdate();
+        }, seconds * 1000);
+    }
+
     /** Stops the microphone and denoiser opened for the current call */
     private releaseLocalAudio() {
         this.micDenoiser?.close();
@@ -619,11 +644,13 @@ export class SIPCore {
                 this.stopIncomingRingtone();
                 this.triggerUpdate();
             });
+            const session = e.session;
             e.session.on("accepted", (e: IncomingEvent) => {
                 console.info("Call accepted");
                 this.startCallTimer();
                 this.stopOutgoingTone();
                 this.stopIncomingRingtone();
+                this.applyMuteOnStart(session);
                 this.triggerUpdate();
             });
 

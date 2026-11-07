@@ -38,6 +38,7 @@ sip_config = {
         "microphone": False,
         "remote": False
     },
+    "mute_on_start": 0,
     "popup_config": {
         "auto_open": True,
         "large": False,

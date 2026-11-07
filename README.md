@@ -134,6 +134,12 @@ Add this to the SIP Core config (Settings → Devices & Services → SIP Core �
 noise_suppression:
   microphone: true   # denoise your mic before it is sent
   remote: false      # denoise the audio you receive (e.g. a noisy doorbell)
+  # The browser's own mic processing (default true). On Android these turn on the
+  # phone's built-in voice-call effects, which can gate or crackle on speakerphone.
+  browser_echo_cancellation: true
+  browser_noise_suppression: false
+  browser_auto_gain: false
+mute_on_start: 3     # keep the mic muted for the first seconds while echo cancellers adapt
 ```
 
 - Runs locally in the browser (AudioWorklet + WASM, ~150 KB loaded only when a call starts).

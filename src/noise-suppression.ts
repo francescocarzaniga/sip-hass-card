@@ -19,6 +19,23 @@ export interface NoiseSuppressionConfig {
     microphone?: boolean;
     /** Denoise the audio received from the other party before it is played. */
     remote?: boolean;
+    /**
+     * The browser's own microphone processing (default `true` each). On Android
+     * these switch on the phone's built-in voice-call effects, which can gate or
+     * crackle on speakerphone; set them to `false` to bypass them.
+     */
+    browser_echo_cancellation?: boolean;
+    browser_noise_suppression?: boolean;
+    browser_auto_gain?: boolean;
+}
+
+/** True when any `browser_*` switch is set, i.e. SIP Core must open the microphone itself */
+export function hasBrowserProcessingOverrides(config?: NoiseSuppressionConfig): boolean {
+    return (
+        config?.browser_echo_cancellation !== undefined ||
+        config?.browser_noise_suppression !== undefined ||
+        config?.browser_auto_gain !== undefined
+    );
 }
 
 let wasmPromise: Promise<ArrayBuffer> | null = null;
