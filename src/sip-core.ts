@@ -2,7 +2,12 @@ import { UA, WebSocketInterface } from "jssip/lib/JsSIP";
 import { RTCSessionEvent, CallOptions } from "jssip/lib/UA";
 import { EndEvent, PeerConnectionEvent, IncomingEvent, IceCandidateEvent, RTCSession } from "jssip/lib/RTCSession";
 import pjson from "../package.json";
-import { DenoisedStream, NoiseSuppressionConfig, hasBrowserProcessingOverrides } from "./noise-suppression";
+import {
+    DenoisedStream,
+    NoiseSuppressionConfig,
+    browserProcessing,
+    hasBrowserProcessingOverrides,
+} from "./noise-suppression";
 
 const version = pjson.version;
 
@@ -122,6 +127,8 @@ export class SIPCore {
     private localMicStream: MediaStream | null = null;
     private micDenoiser: DenoisedStream | null = null;
     private remoteDenoiser: DenoisedStream | null = null;
+    /** The stream playing on the speaker; the echo reference for software AEC */
+    private playbackStream: MediaStream | null = null;
 
     public incomingAudio: HTMLAudioElement | null = null;
     public outgoingAudio: HTMLAudioElement | null = null;
@@ -212,24 +219,24 @@ export class SIPCore {
         let micStream: MediaStream | undefined = undefined;
         const ns = this.config.noise_suppression;
         const denoiseMic = ns?.microphone === true;
+        const softwareAec = ns?.software_echo_cancellation === true;
+        const openMic = async (processing: MediaTrackConstraints) => {
+            console.info("SIP Core: browser microphone processing", processing);
+            return navigator.mediaDevices.getUserMedia({
+                audio: {
+                    ...(this.AudioInputId !== null ? { deviceId: { exact: this.AudioInputId } } : {}),
+                    ...processing,
+                },
+                video: this.config.sip_video,
+            });
+        };
+        const processing = browserProcessing(ns);
         if (this.AudioInputId !== null || denoiseMic || hasBrowserProcessingOverrides(ns)) {
             if (this.AudioInputId !== null) {
                 console.debug(`Using audio input device: ${this.AudioInputId}`);
             }
-            const processing = {
-                echoCancellation: ns?.browser_echo_cancellation ?? true,
-                noiseSuppression: ns?.browser_noise_suppression ?? true,
-                autoGainControl: ns?.browser_auto_gain ?? true,
-            };
-            console.info("SIP Core: browser microphone processing", processing);
             try {
-                micStream = await navigator.mediaDevices.getUserMedia({
-                    audio: {
-                        ...(this.AudioInputId !== null ? { deviceId: { exact: this.AudioInputId } } : {}),
-                        ...processing,
-                    },
-                    video: this.config.sip_video,
-                });
+                micStream = await openMic(processing);
                 this.localMicStream = micStream;
             } catch (err) {
                 console.error(`Error getting audio input: ${err}`);
@@ -237,12 +244,27 @@ export class SIPCore {
             }
         }
 
-        if (micStream && denoiseMic) {
+        if (micStream && (denoiseMic || softwareAec)) {
             try {
-                this.micDenoiser = await DenoisedStream.create(micStream, this.version);
+                this.micDenoiser = await DenoisedStream.create(micStream, this.version, {
+                    denoise: denoiseMic,
+                    echoCancel: softwareAec,
+                });
+                if (this.playbackStream) this.micDenoiser.setEchoReference(this.playbackStream);
                 micStream = this.micDenoiser.stream;
             } catch (err) {
-                console.warn("SIP Core: microphone noise suppression unavailable, sending raw audio:", err);
+                console.warn("SIP Core: microphone processing unavailable, sending raw audio:", err);
+                if (softwareAec && !processing.echoCancellation) {
+                    // Don't end up with no echo cancellation at all: reopen the mic with the browser's
+                    try {
+                        this.localMicStream?.getTracks().forEach((track) => track.stop());
+                        micStream = await openMic({ ...processing, echoCancellation: true });
+                        this.localMicStream = micStream;
+                    } catch (reopenErr) {
+                        console.error(`Error getting audio input: ${reopenErr}`);
+                        micStream = undefined;
+                    }
+                }
             }
         }
 
@@ -557,6 +579,7 @@ export class SIPCore {
     /** Releases all audio resources SIP Core opened for the current call */
     private releaseCallAudio() {
         this.releaseLocalAudio();
+        this.playbackStream = null;
         this.remoteDenoiser?.close();
         this.remoteDenoiser = null;
     }
@@ -736,7 +759,7 @@ export class SIPCore {
             this.remoteDenoiser = null;
             if (this.config.noise_suppression?.remote === true) {
                 try {
-                    const denoiser = await DenoisedStream.create(stream, this.version, true);
+                    const denoiser = await DenoisedStream.create(stream, this.version, { remote: true });
                     if (this.remoteAudioStream !== stream) {
                         // Call ended or stream replaced while RNNoise was loading
                         denoiser.close();
@@ -749,6 +772,9 @@ export class SIPCore {
                 }
             }
             remoteAudio.srcObject = playbackStream;
+            // Software AEC removes exactly what is played on the speaker from the mic
+            this.playbackStream = playbackStream;
+            this.micDenoiser?.setEchoReference(playbackStream);
             try {
                 await remoteAudio.play();
             } catch (err) {

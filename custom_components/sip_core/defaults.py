@@ -36,7 +36,8 @@ sip_config = {
     "auto_answer": False,
     "noise_suppression": {
         "microphone": False,
-        "remote": False
+        "remote": False,
+        "software_echo_cancellation": False
     },
     "mute_on_start": 0,
     "popup_config": {

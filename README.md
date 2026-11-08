@@ -134,15 +134,20 @@ Add this to the SIP Core config (Settings → Devices & Services → SIP Core �
 noise_suppression:
   microphone: true   # denoise your mic before it is sent
   remote: false      # denoise the audio you receive (e.g. a noisy doorbell)
-  # The browser's own mic processing (default true). On Android these turn on the
-  # phone's built-in voice-call effects, which can gate or crackle on speakerphone.
-  browser_echo_cancellation: true
+  # WebRTC's AEC3 echo canceller running in the page (WASM), using the played
+  # audio as reference. Switches the browser's/phone's own echo canceller off.
+  software_echo_cancellation: true
+  # The browser's own mic processing (default true; echo cancellation defaults to
+  # false with software_echo_cancellation). On Android these turn on the phone's
+  # built-in voice-call effects, which can gate or crackle on speakerphone.
+  browser_echo_cancellation: false
   browser_noise_suppression: false
   browser_auto_gain: false
 mute_on_start: 3     # keep the mic muted for the first seconds while echo cancellers adapt
 ```
 
-- Runs locally in the browser (AudioWorklet + WASM, ~150 KB loaded only when a call starts).
+- Runs locally in the browser (AudioWorklet + WASM, loaded only when a call starts: ~150 KB for RNNoise, ~520 KB for AEC3).
+- With `software_echo_cancellation`, the browser console reports the echo delay and reduction (ERLE) every 5 seconds. AEC3 comes from [webrtc-audio-processing](https://gitlab.freedesktop.org/pulseaudio/webrtc-audio-processing) via `@ai-ecoverse/wasm-webrtc-audio-processing` (BSD-3-Clause / Apache-2.0).
 - If it cannot start (old browser, or audio blocked until the first tap), the call continues with unprocessed audio and a warning is logged in the browser console.
 - RNNoise works best on steady background noise (fans, hum, traffic, wind); it cannot remove speaker echo, which is the job of the browser's echo cancellation.
 

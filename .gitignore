@@ -8,3 +8,8 @@ rnnoise-worklet.js
 rnnoise.wasm
 rnnoise_simd.wasm
 rnnoise-worklet.js.LICENSE.txt
+aec-worklet.js
+aec-worklet.js.LICENSE.txt
+webrtc-apm.wasm
+webrtc-apm.LICENSE.txt
+webrtc-apm.THIRD-PARTY-NOTICES.md

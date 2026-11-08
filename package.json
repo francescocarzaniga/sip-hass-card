@@ -1,6 +1,6 @@
 {
   "name": "ha-sip",
-  "version": "5.1.2-rnnoise.7",
+  "version": "5.1.2-rnnoise.8",
   "description": "A SIP client inside home assistant!",
   "main": "sipjs-card.js",
   "scripts": {
@@ -30,6 +30,7 @@
     "webpack-cli": "^4.10.0"
   },
   "dependencies": {
+    "@ai-ecoverse/wasm-webrtc-audio-processing": "2.1.0-2",
     "@sapphi-red/web-noise-suppressor": "^0.4.1",
     "jssip": "^3.10.6",
     "lit": "^2.8.0"
