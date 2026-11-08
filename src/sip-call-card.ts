@@ -1,6 +1,6 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import { sipCore, CALLSTATE } from "./sip-core";
+import { sipCore, CALLSTATE, CallAudioOptions, audioFromCardConfig } from "./sip-core";
 import { AudioVisualizer } from "./audio-visualizer";
 import { MediaSource, directPlayerUrl, ingressPlayerUrl, sourceKey, streamName } from "./go2rtc";
 
@@ -71,6 +71,9 @@ interface CallCardConfig extends MediaSource {
      * incoming call, and hangs up an active one
      */
     tap_to_call?: boolean;
+    /** Audio settings for calls placed or answered from this card (override the SIP Core config) */
+    noise_suppression?: CallAudioOptions["noise_suppression"];
+    mute_on_start?: number;
 }
 
 @customElement("sip-call-card")
@@ -354,10 +357,10 @@ class SIPCallCard extends LitElement {
         if (this.config?.tap_to_call !== true) return;
         switch (sipCore.callState) {
             case CALLSTATE.IDLE:
-                if (this.config.call_extension) sipCore.startCall(String(this.config.call_extension));
+                if (this.config.call_extension) sipCore.startCall(String(this.config.call_extension), audioFromCardConfig(this.config));
                 break;
             case CALLSTATE.INCOMING:
-                sipCore.answerCall();
+                sipCore.answerCall(audioFromCardConfig(this.config));
                 break;
             default:
                 sipCore.endCall();
@@ -494,8 +497,8 @@ class SIPCallCard extends LitElement {
                                 isIdle ? !callExtension : sipCore.callState !== CALLSTATE.INCOMING
                             }"
                             @click="${() => {
-                                if (isIdle && callExtension) sipCore.startCall(callExtension);
-                                else sipCore.answerCall();
+                                if (isIdle && callExtension) sipCore.startCall(callExtension, audioFromCardConfig(this.config));
+                                else sipCore.answerCall(audioFromCardConfig(this.config));
                             }}">
                             <ha-icon .icon=${phoneIcon}></ha-icon>
                         </ha-icon-button>

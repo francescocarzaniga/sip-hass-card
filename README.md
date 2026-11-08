@@ -84,6 +84,16 @@ extensions:
 buttons: []
 ```
 
+Audio settings can also be set per card. `noise_suppression` (merged key by key) and `mute_on_start` in a call card, call button or contacts card apply to calls placed or answered from that card, on top of the SIP Core config:
+
+```yaml
+type: custom:sip-call-card
+noise_suppression:
+  software_echo_cancellation: true
+  browser_noise_suppression: false
+mute_on_start: 2
+```
+
 The card-level picture stays on (without restarting) during calls with `call_extension`; calls with other extensions use that extension's own `camera_entity` / `go2rtc_*` keys. If go2rtc can't be reached through ingress, the card falls back to `camera_entity`.
 
 <br>

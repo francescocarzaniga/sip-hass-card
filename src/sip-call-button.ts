@@ -1,6 +1,6 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property } from "lit/decorators.js";
-import { sipCore, CALLSTATE } from "./sip-core";
+import { sipCore, CALLSTATE, audioFromCardConfig } from "./sip-core";
 
 declare global {
     interface Window {
@@ -218,9 +218,9 @@ class SIPCallButtonCard extends LitElement {
     handleClick() {
         const callState = sipCore.callState;
         if (callState === CALLSTATE.IDLE) {
-            sipCore.startCall(this.config?.extension || "");
+            sipCore.startCall(this.config?.extension || "", audioFromCardConfig(this.config));
         } else if (callState === CALLSTATE.INCOMING) {
-            sipCore.answerCall();
+            sipCore.answerCall(audioFromCardConfig(this.config));
         } else {
             sipCore.endCall();
         }

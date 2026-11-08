@@ -45,6 +45,22 @@ export interface ICEConfig extends RTCConfiguration {
     iceGatheringTimeout?: number;
 }
 
+/**
+ * Audio settings for one call, e.g. from the card that placed or answered it.
+ * Each key overrides the same key of the SIP Core config for that call only;
+ * `noise_suppression` is merged key by key.
+ */
+export interface CallAudioOptions {
+    noise_suppression?: NoiseSuppressionConfig;
+    mute_on_start?: number;
+}
+
+/** Picks `noise_suppression` / `mute_on_start` from a card's config, if it sets either */
+export function audioFromCardConfig(config: any): CallAudioOptions | undefined {
+    if (!config || (config.noise_suppression === undefined && config.mute_on_start === undefined)) return undefined;
+    return { noise_suppression: config.noise_suppression, mute_on_start: config.mute_on_start };
+}
+
 /** Configuration for SIP Core */
 export interface SIPCoreConfig {
     ice_config: ICEConfig;
@@ -129,6 +145,8 @@ export class SIPCore {
     private remoteDenoiser: DenoisedStream | null = null;
     /** The stream playing on the speaker; the echo reference for software AEC */
     private playbackStream: MediaStream | null = null;
+    /** Effective audio settings of the current call (config + card overrides) */
+    private callAudio: { ns?: NoiseSuppressionConfig; muteOnStart?: number } | null = null;
 
     public incomingAudio: HTMLAudioElement | null = null;
     public outgoingAudio: HTMLAudioElement | null = null;
@@ -212,12 +230,24 @@ export class SIPCore {
         }
     }
 
-    private async callOptions(): Promise<CallOptions> {
+    private async callOptions(audio?: CallAudioOptions): Promise<CallOptions> {
         // Drop anything left over from a previous attempt (e.g. a call that never started)
         this.releaseLocalAudio();
 
+        // Per-call settings (from the card) on top of the SIP Core config
+        this.callAudio = {
+            ns:
+                audio?.noise_suppression || this.config.noise_suppression
+                    ? { ...(this.config.noise_suppression ?? {}), ...(audio?.noise_suppression ?? {}) }
+                    : undefined,
+            muteOnStart: audio?.mute_on_start ?? this.config.mute_on_start,
+        };
+        if (audio?.noise_suppression || audio?.mute_on_start !== undefined) {
+            console.info("SIP Core: per-call audio settings from the card", this.callAudio);
+        }
+
         let micStream: MediaStream | undefined = undefined;
-        const ns = this.config.noise_suppression;
+        const ns = this.callAudio.ns;
         const denoiseMic = ns?.microphone === true;
         const softwareAec = ns?.software_echo_cancellation === true;
         const openMic = async (processing: MediaTrackConstraints) => {
@@ -519,12 +549,17 @@ export class SIPCore {
         }
     }
 
-    async answerCall() {
+    /**
+     * Answers the incoming call.
+     * @param audio per-call audio settings (e.g. from the card that answered),
+     *   overriding the SIP Core config's `noise_suppression` / `mute_on_start`
+     */
+    async answerCall(audio?: CallAudioOptions) {
         if (this.callState !== CALLSTATE.INCOMING) {
             console.warn("Not in incoming call state. Cannot answer.");
             return;
         }
-        this.RTCSession?.answer(await this.callOptions());
+        this.RTCSession?.answer(await this.callOptions(audio));
         this.triggerUpdate();
     }
 
@@ -533,7 +568,12 @@ export class SIPCore {
         this.triggerUpdate();
     }
 
-    async startCall(extension: string) {
+    /**
+     * Calls an extension.
+     * @param audio per-call audio settings (e.g. from the card that placed the
+     *   call), overriding the SIP Core config's `noise_suppression` / `mute_on_start`
+     */
+    async startCall(extension: string, audio?: CallAudioOptions) {
         if (!this.ua) {
             console.warn("SIP Core is still starting. Cannot place a call yet.");
             return;
@@ -544,7 +584,7 @@ export class SIPCore {
             console.warn("Already in a call. Cannot start another one.");
             return;
         }
-        const options = await this.callOptions();
+        const options = await this.callOptions(audio);
         try {
             this.ua.call(extension, options);
         } catch (err) {
@@ -555,7 +595,7 @@ export class SIPCore {
 
     /** Mutes the mic for `mute_on_start` seconds after the call connects, then unmutes it */
     private applyMuteOnStart(session: RTCSession) {
-        const seconds = Number(this.config.mute_on_start) || 0;
+        const seconds = Number(this.callAudio?.muteOnStart ?? this.config.mute_on_start) || 0;
         if (seconds <= 0) return;
         console.info(`SIP Core: muting microphone for the first ${seconds}s of the call`);
         session.mute({ audio: true });
@@ -580,6 +620,7 @@ export class SIPCore {
     private releaseCallAudio() {
         this.releaseLocalAudio();
         this.playbackStream = null;
+        this.callAudio = null;
         this.remoteDenoiser?.close();
         this.remoteDenoiser = null;
     }
@@ -757,7 +798,7 @@ export class SIPCore {
             let playbackStream = stream;
             this.remoteDenoiser?.close();
             this.remoteDenoiser = null;
-            if (this.config.noise_suppression?.remote === true) {
+            if ((this.callAudio?.ns ?? this.config.noise_suppression)?.remote === true) {
                 try {
                     const denoiser = await DenoisedStream.create(stream, this.version, { remote: true });
                     if (this.remoteAudioStream !== stream) {

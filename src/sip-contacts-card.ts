@@ -1,5 +1,5 @@
 import { LitElement, html, css } from "lit";
-import { sipCore } from "./sip-core";
+import { sipCore, audioFromCardConfig } from "./sip-core";
 
 declare global {
     interface Window {
@@ -137,7 +137,7 @@ class SIPContactsCard extends LitElement {
                                                     `custom_${extension.name}`,
                                                 ) as any;
                                                 const customNumber = el.value;
-                                                sipCore.startCall(customNumber);
+                                                sipCore.startCall(customNumber, audioFromCardConfig(this.config));
                                             }
                                         }}"
                                         class="editField"
@@ -146,7 +146,7 @@ class SIPContactsCard extends LitElement {
                                         @click="${() => {
                                             var el = this.shadowRoot?.getElementById(`custom_${extension.name}`) as any;
                                             const customNumber = el.value;
-                                            sipCore.startCall(customNumber);
+                                            sipCore.startCall(customNumber, audioFromCardConfig(this.config));
                                         }}"
                                         appearance="plain"
                                         size="s"
@@ -165,7 +165,7 @@ class SIPContactsCard extends LitElement {
                                     ></state-badge>
                                     <div class="info">${extension.name}</div>
                                     <ha-button
-                                        @click="${() => sipCore.startCall(number)}"
+                                        @click="${() => sipCore.startCall(number, audioFromCardConfig(this.config))}"
                                         appearance="plain"
                                         size="s"
                                         variant="brand"
